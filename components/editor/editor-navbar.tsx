@@ -1,5 +1,7 @@
 import { PanelLeftClose, PanelLeftOpen } from "lucide-react"
 
+import { UserButton } from "@clerk/nextjs"
+
 import { Button } from "@/components/ui/button"
 
 interface EditorNavbarProps {
@@ -24,7 +26,9 @@ export function EditorNavbar({
         </Button>
       </div>
       <div className="flex flex-1 items-center justify-center" />
-      <div className="flex flex-1 items-center justify-end gap-2" />
+      <div className="flex flex-1 items-center justify-end gap-2">
+        <UserButton />
+      </div>
     </header>
   )
 }
