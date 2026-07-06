@@ -3,6 +3,7 @@
 import { useState } from "react"
 
 import { EditorNavbar } from "@/components/editor/editor-navbar"
+import { ProjectDialogsProvider } from "@/components/editor/project-dialogs-provider"
 import { ProjectSidebar } from "@/components/editor/project-sidebar"
 
 export default function EditorLayout({
@@ -19,11 +20,13 @@ export default function EditorLayout({
         onToggleSidebar={() => setIsSidebarOpen((open) => !open)}
       />
       <div className="relative flex flex-1 overflow-hidden">
-        <ProjectSidebar
-          isOpen={isSidebarOpen}
-          onClose={() => setIsSidebarOpen(false)}
-        />
-        {children}
+        <ProjectDialogsProvider>
+          <ProjectSidebar
+            isOpen={isSidebarOpen}
+            onClose={() => setIsSidebarOpen(false)}
+          />
+          {children}
+        </ProjectDialogsProvider>
       </div>
     </div>
   )
