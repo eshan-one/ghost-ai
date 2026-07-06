@@ -5,11 +5,11 @@ change.
 
 ## Current Phase
 
-- Feature 04 (Project Dialogues) — complete
+- Feature 05 (Prisma) — schema + client done, migration deferred
 
 ## Current Goal
 
-- Feature 05 (TBD)
+- Run `prisma migrate dev` once a local Postgres is reachable (see Open Questions), then start Feature 06.
 
 ## Completed
 
@@ -18,25 +18,29 @@ change.
 - Wired the two components into a real route: `app/editor/layout.tsx` is a `"use client"` layout holding the `isSidebarOpen` state (`useState`) and rendering `EditorNavbar` + `ProjectSidebar` around `{children}`; `app/editor/page.tsx` is a minimal placeholder ("Canvas coming soon") so the route renders until the canvas feature lands. Verified with `tsc --noEmit` and `npm run lint` only (no browser check this round, per user request).
 - Feature 03: Auth — Clerk (`@clerk/nextjs` ^7, Core 3) was already installed and partially scaffolded (`ClerkProvider` in `app/layout.tsx`, `proxy.ts`, `app/sign-in`/`app/sign-up` route folders, `.env.local` keys); this pass finished wiring it per `context/feature-specs/03-auth.md`. `app/layout.tsx` now applies Clerk's `dark` theme (`@clerk/ui/themes`) with every `appearance.variables` color/font/radius mapped to the app's existing CSS custom properties (`var(--accent-primary)`, `var(--bg-elevated)`, `var(--font-geist-sans)`, `var(--radius)`, etc.) — no hardcoded colors. Added `components/auth/auth-page-layout.tsx`: a shared two-panel layout (left panel hidden below `lg`, holds a text-only logo/tagline/feature list; right panel centers the Clerk form) used by both `app/sign-in/[[...sign-in]]/page.tsx` and `app/sign-up/[[...sign-up]]/page.tsx`, each just rendering `<SignIn />`/`<SignUp />` inside it. Added `NEXT_PUBLIC_CLERK_SIGN_IN_URL=/sign-in` and `NEXT_PUBLIC_CLERK_SIGN_UP_URL=/sign-up` to `.env.local` (Clerk's standard env vars, picked up automatically by `ClerkProvider`); `proxy.ts`'s `createRouteMatcher` now builds its public-route list from those two env vars instead of hardcoded path strings, protecting every other route via `auth.protect()`. `app/page.tsx` is now an async Server Component that calls `auth()` and redirects to `/editor` when `isAuthenticated`, else `/sign-in`. `components/editor/editor-navbar.tsx` right section now renders Clerk's `UserButton` directly (dropped the `Show`/`SignInButton`/`SignUpButton` signed-out branch that was there before — `/editor` is already unreachable while signed out because `proxy.ts` protects it, so that branch was dead code). Verified with `tsc --noEmit` and `npm run build` (both pass); no lint run or browser check this round, per user request.
 - Feature 04: Project Dialogues — built the `/editor` home screen and project create/rename/delete dialogs per `context/feature-specs/04-project-dialogues`, mock data only, no API/persistence. `app/editor/page.tsx` is now a `"use client"` component rendering the centered heading/description/`New Project` button (no card wrapper), wired to open the Create dialog. Added `types/project.ts` (`Project` interface with `role: "owner" | "collaborator"`), `lib/mock-projects.ts` (mock owned + shared project lists), `lib/slug.ts` (`slugify()` helper for the live slug preview). Added a dedicated `hooks/use-project-dialogs.ts` hook holding all three pieces of state the spec asked for in one place: which dialog is open and for which project (discriminated union: `create` / `rename` / `delete` / `null`), the shared name form field, and an `isLoading` flag (mock async submit with a `setTimeout` — no real request). `components/editor/project-dialogs-provider.tsx` wraps the hook in a React Context (`ProjectDialogsProvider` / `useProjectDialogsContext`) so both the editor home page and the sidebar — separate components under the same layout — can trigger the same dialog state; it renders the three dialogs (`create-project-dialog.tsx`, `rename-project-dialog.tsx`, `delete-project-dialog.tsx`) using the existing `components/ui/dialog.tsx` primitive (untouched, per the protected-foundation-components rule). Create dialog shows a live slug preview via `slugify(name)` that updates on every keystroke. Rename dialog prefills the name input, shows the current name in the description, autofocuses, and submits on Enter. Delete dialog has no input, destructive copy only, and its confirm button uses `variant="destructive"`. `app/editor/layout.tsx` now wraps `ProjectSidebar` and `{children}` in `ProjectDialogsProvider` so the context is available to both. `components/editor/project-sidebar.tsx` renders `mockOwnedProjects`/`mockSharedProjects` through a new `components/editor/project-list-item.tsx` row component; rename/delete icon buttons (`Pencil`/`Trash2`, revealed on row hover) only render when `project.role === "owner"` — shared/collaborator rows show the name only. Added a `fixed inset-0 z-30 bg-black/50 lg:hidden` backdrop scrim rendered alongside the sidebar `<aside>` (only when `isOpen`) whose `onClick` calls the same `onClose` the close button uses, satisfying the mobile tap-outside-to-close + scrim requirement without touching desktop layout. Verified with `tsc --noEmit`, `npm run lint`, and `npm run build` (all pass, zero warnings). Browser/interaction testing intentionally left to the user this round, per their request.
+- Feature 05: Prisma — added `prisma/models/project.prisma` (multi-file schema; `prisma.config.ts` already pointed `schema` at the `prisma/` directory) with `Project` (`ownerId`, `name`, `description?`, `status: ProjectStatus` enum `DRAFT`/`ARCHIVED` defaulting to `DRAFT`, `canvasJsonPath?`, `createdAt`/`updatedAt`, `@@index([ownerId])`, `@@index([createdAt])`) and `ProjectCollaborator` (`projectId` with `onDelete: Cascade` relation to `Project`, `collaboratorEmail`, `createdAt`, `@@unique([projectId, collaboratorEmail])`, `@@index([collaboratorEmail])`, `@@index([projectId, createdAt])`). Both use `String @id @default(cuid())`. Added `lib/prisma.ts`: a cached singleton (`global.prisma` in non-production, matching the standard Next.js hot-reload pattern) that branches on `DATABASE_URL` — `prisma+postgres://` prefix constructs `new PrismaClient({ accelerateUrl })` (Prisma 7's client has this built in natively, no `@prisma/extension-accelerate` package needed), anything else builds `new PrismaClient({ adapter: new PrismaPg(databaseUrl) })`. Client generator output lives at `app/generated/prisma` (already configured, already gitignored); its entry point is `client.ts`, not `index.ts`, so the import is `@/app/generated/prisma/client`. Ran `npx prisma generate` successfully. **Migration was not run** — `DATABASE_URL` points at a local `prisma dev` server (Docker-backed; hostname `db.prisma.io` in the URL is a marker Prisma's CLI rewrites to a local tunnel, not a real remote host), and Docker Desktop's daemon was not running in this environment (`docker ps` failed, `npx prisma dev ls` showed the `default` server as `not_running`). User explicitly chose to skip migration this round rather than have it started for them. Verified with `tsc --noEmit` and `npm run build` (both pass); no lint run or browser check this round (non-UI feature).
 
 ## In Progress
 
-- None.
+- Feature 05 (Prisma) migration — schema and client are done and build-verified; `prisma migrate dev` still needs to be run once the local dev database is reachable.
 
 ## Next Up
 
 - Server testing/manual QA of Feature 04 (project dialogs) — left to the user.
-- Feature 05 — next feature spec not yet written.
+- Start Docker Desktop, run `npx prisma dev start` (or equivalent), then `npx prisma migrate dev --name init_project_models` to create the first migration against a live database.
+- Feature 06 — next feature spec not yet written.
 
 ## Open Questions
 
-- None yet.
+- `DATABASE_URL` in `.env.local` targets a local `prisma dev` (Docker-backed) Postgres server, not a reachable remote database in this environment. Migration is blocked until Docker Desktop is running and `npx prisma dev start` has been run.
 
 ## Architecture Decisions
 
 - shadcn/ui on Tailwind v4 using CSS-variable theming (no `tailwind.config.js`); tokens live in `app/globals.css` under `@theme inline`.
 - Dark-only theme: shadcn's `:root` variables are set directly to dark values, and the app's own palette tokens from `context/ui-context.md` live alongside them in the same `:root` block. No `.dark` class or `prefers-color-scheme` toggle exists — verified visually.
 - `components/ui/*` are protected foundation components (per `context/ai-workflow-rules.md`) — not modified after `shadcn` CLI generation.
+- Prisma uses multi-file schema mode (`prisma.config.ts` sets `schema: "prisma"`, a directory); model files live under `prisma/models/*.prisma`. Client generator output is `app/generated/prisma`, imported as `@/app/generated/prisma/client` (that dir has no `index.ts`).
+- `lib/prisma.ts` picks the driver at runtime from `DATABASE_URL`'s prefix (`prisma+postgres://` → Accelerate via the client's native `accelerateUrl` option; anything else → `@prisma/adapter-pg`) rather than hardcoding one driver, so the same code works against Prisma Postgres/Accelerate and a plain Postgres instance.
 
 ## Session Notes
 
